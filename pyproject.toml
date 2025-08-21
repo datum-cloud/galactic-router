@@ -1,0 +1,16 @@
+[project]
+name = "galactic-router"
+version = "0.0.1"
+description = "Routing engine for Galactic"
+
+requires-python = ">=3.13"
+dependencies = [
+    "click>=8.2.1",
+]
+
+[project.scripts]
+galactic-router = "galactic_router:run"
+
+[build-system]
+requires = ["flit_core<4"]
+build-backend = "flit_core.buildapi"
