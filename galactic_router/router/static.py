@@ -16,20 +16,23 @@ class StaticRouter(BaseRouter):
     async def handle_register(self, event: RegisterEvent) -> bool:
         match event.worker:
             case 'node1':
-                pass
+                await self.bus.dispatch(StaticRouter.create_route("node1", "10.1.1.1/32", "2001:1::1234:1234:1234:ffff", ["2001:1::1234:1234:1234:ffff"], "ADD"))
             case 'node2':
                 await self.bus.dispatch(StaticRouter.create_route("node1", "10.1.1.2/32", "2001:1::1234:1234:1234:ffff", ["2001:2::1234:1234:1234:ffff"], "ADD"))
                 await self.bus.dispatch(StaticRouter.create_route("node2", "10.1.1.1/32", "2001:2::1234:1234:1234:ffff", ["2001:1::1234:1234:1234:ffff"], "ADD"))
+                await self.bus.dispatch(StaticRouter.create_route("node2", "10.1.1.2/32", "2001:2::1234:1234:1234:ffff", ["2001:2::1234:1234:1234:ffff"], "ADD"))
             case 'node3':
-                await self.bus.dispatch(StaticRouter.create_route("node3", "10.1.1.2/32", "2001:3::1234:1234:1234:ffff", ["2001:2::1234:1234:1234:ffff"], "ADD"))
-                await self.bus.dispatch(StaticRouter.create_route("node3", "10.1.1.1/32", "2001:3::1234:1234:1234:ffff", ["2001:1::1234:1234:1234:ffff"], "ADD"))
                 await self.bus.dispatch(StaticRouter.create_route("node1", "10.1.1.3/32", "2001:1::1234:1234:1234:ffff", ["2001:3::1234:1234:1234:ffff"], "ADD"))
                 await self.bus.dispatch(StaticRouter.create_route("node2", "10.1.1.3/32", "2001:2::1234:1234:1234:ffff", ["2001:3::1234:1234:1234:ffff"], "ADD"))
+                await self.bus.dispatch(StaticRouter.create_route("node3", "10.1.1.1/32", "2001:3::1234:1234:1234:ffff", ["2001:1::1234:1234:1234:ffff"], "ADD"))
+                await self.bus.dispatch(StaticRouter.create_route("node3", "10.1.1.2/32", "2001:3::1234:1234:1234:ffff", ["2001:2::1234:1234:1234:ffff"], "ADD"))
+                await self.bus.dispatch(StaticRouter.create_route("node3", "10.1.1.3/32", "2001:3::1234:1234:1234:ffff", ["2001:3::1234:1234:1234:ffff"], "ADD"))
         return True
 
     async def handle_deregister(self, event: DeregisterEvent) -> bool:
         match event.worker:
             case 'node1':
+                await self.bus.dispatch(StaticRouter.create_route("node1", "10.1.1.1/32", "2001:1::1234:1234:1234:ffff", ["2001:1::1234:1234:1234:ffff"], "DELETE"))
                 await self.bus.dispatch(StaticRouter.create_route("node2", "10.1.1.1/32", "2001:2::1234:1234:1234:ffff", ["2001:1::1234:1234:1234:ffff"], "DELETE"))
             case 'node2':
                 pass
