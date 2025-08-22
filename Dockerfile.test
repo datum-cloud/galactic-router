@@ -3,6 +3,7 @@ FROM python:3
 COPY galactic_router galactic_router
 COPY pyproject.toml .
 
-RUN pip install -e .
+COPY features features
+RUN pip install -e .[test]
 
-ENTRYPOINT ["galactic-router"]
+RUN behave
