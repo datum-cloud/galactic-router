@@ -1,6 +1,8 @@
 import asyncio
 from typing import List
 
+from behave.api.async_step import use_or_create_async_context
+
 from bubus import EventBus
 
 from galactic_router.router import BaseRouter
@@ -31,6 +33,10 @@ class Collector(BaseRouter):
         return True
 
 
+def before_all(context):
+    use_or_create_async_context(context)
+
+
 def before_scenario(context, scenario):
     context.bus = EventBus()
     context.router = StaticRouter(context.bus)
@@ -38,6 +44,8 @@ def before_scenario(context, scenario):
 
 
 def after_scenario(context, scenario):
-    asyncio.run(context.bus.stop())
-    asyncio.run(context.router.stop())
-    asyncio.run(context.collector.stop())
+    async def shutdown():
+        await context.collector.stop()
+        await context.router.stop()
+        await context.bus.stop()
+    context.async_context.loop.run_until_complete(shutdown())
