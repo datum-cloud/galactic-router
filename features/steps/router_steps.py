@@ -17,6 +17,14 @@ async def step_when_register(context, worker, network, endpoint):
     ))
 
 
+@when(u'a deregister event is received from "{worker}" for network "{network}" and endpoint "{endpoint}"')
+async def step_when_register(context, worker, network, endpoint):
+    await context.bus.dispatch(DeregisterEvent(
+        worker = worker,
+        envelope = pb.Deregister(network=network, srv6_endpoint=endpoint),
+    ))
+
+
 @then('{n:d} route was published')
 @then('{n:d} routes were published')
 def step_then_count(context, n):

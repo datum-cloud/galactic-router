@@ -27,6 +27,13 @@ class StaticRouter(BaseRouter):
         return True
 
     async def handle_deregister(self, event: DeregisterEvent) -> bool:
+        match event.worker:
+            case 'node1':
+                await self.bus.dispatch(StaticRouter.create_route("node2", "10.1.1.1/32", "2001::2", ["2001::1"], "DELETE"))
+            case 'node2':
+                pass
+            case 'node3':
+                pass
         return True
 
     async def handle_route(self, event: RouteEvent) -> bool:
