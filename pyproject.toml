@@ -9,6 +9,8 @@ dependencies = [
     "click>=8.2.1",
     "bubus>=1.5.5",
     "protobuf>=6.32.0",
+    "pydantic>=2.11.7",
+    "sqlmodel>=0.0.24",
 ]
 
 [project.optional-dependencies]

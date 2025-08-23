@@ -1,32 +1,64 @@
+import logging
+import uuid
 import ipaddress
+
 from bubus import EventBus
+
+from sqlmodel import SQLModel, Field, Session, select
+from sqlalchemy import Index
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import NoResultFound
+
 from . import BaseRouter
 from ..events import RegisterEvent, DeregisterEvent, RouteEvent
 from ..proto import remote_pb2 as pb
 
 
+logger = logging.getLogger("StaticRouter")
+
+
+class Registration(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    vpc: str = Field(index=True)
+    network: str
+    endpoint: str
+    worker: str
+
+    __table_args__ = (
+        Index("ix_registration_vpc_network", "vpc", "network"),
+    )
+
+
 class StaticRouter(BaseRouter):
-    def __init__(self, bus: EventBus) -> None:
+    def __init__(self, bus: EventBus, db_engine: Engine) -> None:
         self.bus = bus
+        self.db_engine = db_engine
         super().__init__(bus)
 
     async def stop(self) -> None:
         pass
 
     async def handle_register(self, event: RegisterEvent) -> bool:
-        match event.worker:
-            case 'node1':
-                await self.bus.dispatch(StaticRouter.create_route("node1", "10.1.1.1/32", "2001:1::1234:1234:1234:ffff", ["2001:1::1234:1234:1234:ffff"], "ADD"))
-            case 'node2':
-                await self.bus.dispatch(StaticRouter.create_route("node1", "10.1.1.2/32", "2001:1::1234:1234:1234:ffff", ["2001:2::1234:1234:1234:ffff"], "ADD"))
-                await self.bus.dispatch(StaticRouter.create_route("node2", "10.1.1.1/32", "2001:2::1234:1234:1234:ffff", ["2001:1::1234:1234:1234:ffff"], "ADD"))
-                await self.bus.dispatch(StaticRouter.create_route("node2", "10.1.1.2/32", "2001:2::1234:1234:1234:ffff", ["2001:2::1234:1234:1234:ffff"], "ADD"))
-            case 'node3':
-                await self.bus.dispatch(StaticRouter.create_route("node1", "10.1.1.3/32", "2001:1::1234:1234:1234:ffff", ["2001:3::1234:1234:1234:ffff"], "ADD"))
-                await self.bus.dispatch(StaticRouter.create_route("node2", "10.1.1.3/32", "2001:2::1234:1234:1234:ffff", ["2001:3::1234:1234:1234:ffff"], "ADD"))
-                await self.bus.dispatch(StaticRouter.create_route("node3", "10.1.1.1/32", "2001:3::1234:1234:1234:ffff", ["2001:1::1234:1234:1234:ffff"], "ADD"))
-                await self.bus.dispatch(StaticRouter.create_route("node3", "10.1.1.2/32", "2001:3::1234:1234:1234:ffff", ["2001:2::1234:1234:1234:ffff"], "ADD"))
-                await self.bus.dispatch(StaticRouter.create_route("node3", "10.1.1.3/32", "2001:3::1234:1234:1234:ffff", ["2001:3::1234:1234:1234:ffff"], "ADD"))
+        with Session(self.db_engine) as session:
+            vpc_identifier, _ = StaticRouter.extract_vpc_from_srv6_endpoint(event.envelope.srv6_endpoint)
+            try:
+                new_reg = session.exec(select(Registration).where(Registration.vpc == vpc_identifier, Registration.network == event.envelope.network)).one()
+                new_reg.endpoint = event.envelope.srv6_endpoint
+                new_reg.worker = event.worker
+            except NoResultFound as e:
+                new_reg = Registration(
+                    vpc = vpc_identifier,
+                    network = event.envelope.network,
+                    endpoint = event.envelope.srv6_endpoint,
+                    worker = event.worker,
+                )
+            logger.info(f"register {new_reg.model_dump_json()}")
+            session.add(new_reg)
+            for reg in session.exec(select(Registration).where(Registration.vpc == vpc_identifier)):
+                await self.bus.dispatch(StaticRouter.create_route(new_reg.worker, reg.network, new_reg.endpoint, [reg.endpoint], "ADD"))
+                if str(reg.network) != new_reg.network:
+                    await self.bus.dispatch(StaticRouter.create_route(reg.worker, new_reg.network, reg.endpoint, [new_reg.endpoint], "ADD"))
+            session.commit()
         return True
 
     async def handle_deregister(self, event: DeregisterEvent) -> bool:

@@ -5,6 +5,8 @@ from behave.api.async_step import use_or_create_async_context
 
 from bubus import EventBus
 
+from sqlmodel import SQLModel, create_engine
+
 from galactic_router.router import BaseRouter
 from galactic_router.router.static import StaticRouter
 from galactic_router.events import RegisterEvent, DeregisterEvent, RouteEvent
@@ -16,6 +18,11 @@ class Collector(BaseRouter):
         self.deregister: List[DeregisterEvent] = []
         self.route: List[RouteEvent] = []
         super().__init__(bus)
+
+    def reset(self):
+        self.register.clear()
+        self.deregister.clear()
+        self.route.clear()
 
     async def stop(self) -> None:
         pass
@@ -37,15 +44,26 @@ def before_all(context):
     use_or_create_async_context(context)
 
 
-def before_scenario(context, scenario):
+def before_feature(context, feature):
     context.bus = EventBus()
-    context.router = StaticRouter(context.bus)
+
+    db_engine = create_engine("sqlite:///:memory:")
+    SQLModel.metadata.create_all(db_engine)
+    context.router = StaticRouter(
+        bus = context.bus,
+        db_engine = db_engine,
+    )
+
     context.collector = Collector(context.bus)
 
 
-def after_scenario(context, scenario):
+def after_feature(context, feature):
     async def shutdown():
         await context.collector.stop()
         await context.router.stop()
         await context.bus.stop()
     context.async_context.loop.run_until_complete(shutdown())
+
+
+def after_scenario(context, scenario):
+    context.collector.reset()
