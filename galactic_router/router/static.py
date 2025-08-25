@@ -7,7 +7,6 @@ from bubus import EventBus
 from sqlmodel import SQLModel, Field, Session, select
 from sqlalchemy import Index
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import NoResultFound
 
 from . import BaseRouter
 from ..events import RegisterEvent, DeregisterEvent, RouteEvent
@@ -43,24 +42,46 @@ class StaticRouter(BaseRouter):
         vpc_identifier, _ = StaticRouter.extract_vpc_from_srv6_endpoint(
             event.envelope.srv6_endpoint
         )
-        new_reg = Registration()
-        try:
-            new_reg = self.session.exec(select(Registration).where(
-                Registration.vpc == vpc_identifier,
-                Registration.network == event.envelope.network,
-            )).one()
-        except NoResultFound:
-            new_reg.vpc = vpc_identifier
-            new_reg.network = event.envelope.network
-        new_reg.endpoint = event.envelope.srv6_endpoint
-        new_reg.worker = event.worker
+
+        cur_reg = self.session.exec(select(Registration).where(
+            Registration.vpc == vpc_identifier,
+            Registration.network == event.envelope.network,
+        )).one_or_none()
+        new_reg = Registration(
+            vpc=vpc_identifier,
+            network=event.envelope.network,
+            endpoint=event.envelope.srv6_endpoint,
+            worker=event.worker,
+        )
+
+        if cur_reg is not None:
+            await self.handle_deregister(DeregisterEvent(
+                worker=cur_reg.worker,
+                envelope=pb.Deregister(
+                    network=cur_reg.network,
+                    srv6_endpoint=cur_reg.endpoint,
+                )
+            ))
 
         logger.info(f"register {new_reg.model_dump_json()}")
-        self.session.add(new_reg)
+        # new registration to new worker
+        await self.bus.dispatch(
+            StaticRouter.create_route(
+                new_reg.worker,
+                new_reg.network,
+                new_reg.endpoint,
+                [new_reg.endpoint],
+                "ADD"
+            )
+        )
         for reg in self.session.exec(
             select(Registration)
-                .where(Registration.vpc == vpc_identifier)
+                .where(
+                    Registration.vpc == vpc_identifier,
+                    Registration.network != new_reg.network,
+                )
         ):
+            # existing registration to new worker
             await self.bus.dispatch(
                 StaticRouter.create_route(
                     new_reg.worker,
@@ -70,16 +91,20 @@ class StaticRouter(BaseRouter):
                     "ADD"
                 )
             )
-            if str(reg.network) != new_reg.network:
-                await self.bus.dispatch(
-                    StaticRouter.create_route(
-                        reg.worker,
-                        new_reg.network,
-                        reg.endpoint,
-                        [new_reg.endpoint],
-                        "ADD"
-                    )
+            # new registration to existing worker
+            await self.bus.dispatch(
+                StaticRouter.create_route(
+                    reg.worker,
+                    new_reg.network,
+                    reg.endpoint,
+                    [new_reg.endpoint],
+                    "ADD"
                 )
+            )
+
+        self.session.add(new_reg)
+        if cur_reg is not None:
+            self.session.delete(cur_reg)
         self.session.commit()
         return True
 
@@ -87,14 +112,13 @@ class StaticRouter(BaseRouter):
         vpc_identifier, _ = StaticRouter.extract_vpc_from_srv6_endpoint(
             event.envelope.srv6_endpoint
         )
-        try:
-            current_reg = self.session.exec(select(Registration).where(
-                Registration.vpc == vpc_identifier,
-                Registration.network == event.envelope.network,
-                Registration.endpoint == event.envelope.srv6_endpoint,
-                Registration.worker == event.worker,
-            )).one()
-        except NoResultFound:
+        current_reg = self.session.exec(select(Registration).where(
+            Registration.vpc == vpc_identifier,
+            Registration.network == event.envelope.network,
+            Registration.endpoint == event.envelope.srv6_endpoint,
+            Registration.worker == event.worker,
+        )).one_or_none()
+        if current_reg is None:
             logger.warning(
                 f"could not find registration: "
                 f"vpc={vpc_identifier}, "
