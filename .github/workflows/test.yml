@@ -17,4 +17,4 @@ jobs:
 
       - name: Running Tests
         run: |
-          docker build -f Dockerfile.test
+          docker build . -f Dockerfile.test
