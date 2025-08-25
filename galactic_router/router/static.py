@@ -32,95 +32,94 @@ class Registration(SQLModel, table=True):
 class StaticRouter(BaseRouter):
     def __init__(self, bus: EventBus, db_engine: Engine) -> None:
         self.bus = bus
-        self.db_engine = db_engine
+        self.session = Session(db_engine)
         super().__init__(bus)
 
     async def stop(self) -> None:
-        return  # noqa: WPS324
+        if self.session is not None:
+            self.session.close()
 
     async def handle_register(self, event: RegisterEvent) -> bool:
-        with Session(self.db_engine) as session:
-            vpc_identifier, _ = StaticRouter.extract_vpc_from_srv6_endpoint(
-                event.envelope.srv6_endpoint
-            )
-            new_reg = Registration()
-            try:
-                new_reg = session.exec(select(Registration).where(
-                    Registration.vpc == vpc_identifier,
-                    Registration.network == event.envelope.network,
-                )).one()
-            except NoResultFound:
-                new_reg.vpc = vpc_identifier
-                new_reg.network = event.envelope.network
-            new_reg.endpoint = event.envelope.srv6_endpoint
-            new_reg.worker = event.worker
+        vpc_identifier, _ = StaticRouter.extract_vpc_from_srv6_endpoint(
+            event.envelope.srv6_endpoint
+        )
+        new_reg = Registration()
+        try:
+            new_reg = self.session.exec(select(Registration).where(
+                Registration.vpc == vpc_identifier,
+                Registration.network == event.envelope.network,
+            )).one()
+        except NoResultFound:
+            new_reg.vpc = vpc_identifier
+            new_reg.network = event.envelope.network
+        new_reg.endpoint = event.envelope.srv6_endpoint
+        new_reg.worker = event.worker
 
-            logger.info(f"register {new_reg.model_dump_json()}")
-            session.add(new_reg)
-            for reg in session.exec(
-                select(Registration)
-                    .where(Registration.vpc == vpc_identifier)
-            ):
-                await self.bus.dispatch(
-                    StaticRouter.create_route(
-                        new_reg.worker,
-                        reg.network,
-                        new_reg.endpoint,
-                        [reg.endpoint],
-                        "ADD"
-                    )
+        logger.info(f"register {new_reg.model_dump_json()}")
+        self.session.add(new_reg)
+        for reg in self.session.exec(
+            select(Registration)
+                .where(Registration.vpc == vpc_identifier)
+        ):
+            await self.bus.dispatch(
+                StaticRouter.create_route(
+                    new_reg.worker,
+                    reg.network,
+                    new_reg.endpoint,
+                    [reg.endpoint],
+                    "ADD"
                 )
-                if str(reg.network) != new_reg.network:
-                    await self.bus.dispatch(
-                        StaticRouter.create_route(
-                            reg.worker,
-                            new_reg.network,
-                            reg.endpoint,
-                            [new_reg.endpoint],
-                            "ADD"
-                        )
-                    )
-            session.commit()
-        return True
-
-    async def handle_deregister(self, event: DeregisterEvent) -> bool:
-        with Session(self.db_engine) as session:
-            vpc_identifier, _ = StaticRouter.extract_vpc_from_srv6_endpoint(
-                event.envelope.srv6_endpoint
             )
-            try:
-                current_reg = session.exec(select(Registration).where(
-                    Registration.vpc == vpc_identifier,
-                    Registration.network == event.envelope.network,
-                    Registration.endpoint == event.envelope.srv6_endpoint,
-                    Registration.worker == event.worker,
-                )).one()
-            except NoResultFound:
-                logger.warning(
-                    f"could not find registration: "
-                    f"vpc={vpc_identifier}, "
-                    f"network={event.envelope.network}, "
-                    f"endpoint={event.envelope.srv6_endpoint}, "
-                    f"worker={event.worker}"
-                )
-                return False
-
-            logger.info(f"deregister {current_reg.model_dump_json()}")
-            for reg in session.exec(
-                select(Registration)
-                    .where(Registration.vpc == vpc_identifier)
-            ):
+            if str(reg.network) != new_reg.network:
                 await self.bus.dispatch(
                     StaticRouter.create_route(
                         reg.worker,
-                        current_reg.network,
+                        new_reg.network,
                         reg.endpoint,
-                        [current_reg.endpoint],
-                        "DELETE"
+                        [new_reg.endpoint],
+                        "ADD"
                     )
                 )
-            session.delete(current_reg)
-            session.commit()
+        self.session.commit()
+        return True
+
+    async def handle_deregister(self, event: DeregisterEvent) -> bool:
+        vpc_identifier, _ = StaticRouter.extract_vpc_from_srv6_endpoint(
+            event.envelope.srv6_endpoint
+        )
+        try:
+            current_reg = self.session.exec(select(Registration).where(
+                Registration.vpc == vpc_identifier,
+                Registration.network == event.envelope.network,
+                Registration.endpoint == event.envelope.srv6_endpoint,
+                Registration.worker == event.worker,
+            )).one()
+        except NoResultFound:
+            logger.warning(
+                f"could not find registration: "
+                f"vpc={vpc_identifier}, "
+                f"network={event.envelope.network}, "
+                f"endpoint={event.envelope.srv6_endpoint}, "
+                f"worker={event.worker}"
+            )
+            return False
+
+        logger.info(f"deregister {current_reg.model_dump_json()}")
+        for reg in self.session.exec(
+            select(Registration)
+                .where(Registration.vpc == vpc_identifier)
+        ):
+            await self.bus.dispatch(
+                StaticRouter.create_route(
+                    reg.worker,
+                    current_reg.network,
+                    reg.endpoint,
+                    [current_reg.endpoint],
+                    "DELETE"
+                )
+            )
+        self.session.delete(current_reg)
+        self.session.commit()
         return True
 
     async def handle_route(self, event: RouteEvent) -> bool:
