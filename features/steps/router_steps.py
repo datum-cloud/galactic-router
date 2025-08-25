@@ -6,30 +6,40 @@ from behave.model import Table, Row
 from deepdiff import DeepDiff
 
 from galactic_router.events import RegisterEvent, DeregisterEvent, RouteEvent
-import galactic_router.proto.remote_pb2 as pb
+from galactic_router.proto.remote_pb2 import Register, Deregister, Route
 
 
-@when(u'a register event is received from "{worker}" for network "{network}" and endpoint "{endpoint}"')
+@when(
+    u'a register event is received '
+    u'from "{worker}" '
+    u'for network "{network}" '
+    u'and endpoint "{endpoint}"'
+)
 async def step_when_register(context, worker, network, endpoint):
     await context.bus.dispatch(RegisterEvent(
-        worker = worker,
-        envelope = pb.Register(network=network, srv6_endpoint=endpoint),
+        worker=worker,
+        envelope=Register(network=network, srv6_endpoint=endpoint),
     ))
 
 
-@when(u'a deregister event is received from "{worker}" for network "{network}" and endpoint "{endpoint}"')
-async def step_when_register(context, worker, network, endpoint):
+@when(
+    u'a deregister event is received '
+    u'from "{worker}" '
+    u'for network "{network}" '
+    u'and endpoint "{endpoint}"'
+)
+async def step_when_deregister(context, worker, network, endpoint):
     await context.bus.dispatch(DeregisterEvent(
-        worker = worker,
-        envelope = pb.Deregister(network=network, srv6_endpoint=endpoint),
+        worker=worker,
+        envelope=Deregister(network=network, srv6_endpoint=endpoint),
     ))
 
 
-@then('{n:d} route was published')
-@then('{n:d} routes were published')
-def step_then_count(context, n):
+@then('{num:d} route was published')
+@then('{num:d} routes were published')
+def step_then_count(context, num):
     routes = context.collector.route
-    assert len(routes) == n, f"expected {n} routes, got {len(routes)}"
+    assert len(routes) == num, f"expected {num} routes, got {len(routes)}"
 
 
 @then('the route is as follows:')
@@ -42,8 +52,9 @@ def compare_table_to_routes(table: Table, routes: List[RouteEvent]) -> None:
     assert table is not None, "table is None"
     assert routes is not None, "routes is None"
 
-    headings = [ "worker", "network", "endpoint", "segments", "status" ]
-    assert headings == table.headings, f"headings do not match: {", ".join(headings)}"
+    headings = ["worker", "network", "endpoint", "segments", "status"]
+    assert headings == table.headings, \
+        f"headings do not match: {", ".join(headings)}"
 
     routes_table = Table(headings, [
         Row(
@@ -53,7 +64,7 @@ def compare_table_to_routes(table: Table, routes: List[RouteEvent]) -> None:
                 route.envelope.network,
                 route.envelope.srv6_endpoint,
                 ",".join(route.envelope.srv6_segments),
-                pb.Route.Status.Name(route.envelope.status),
+                Route.Status.Name(route.envelope.status),
             ]
         )
         for route in routes
@@ -64,5 +75,5 @@ def compare_table_to_routes(table: Table, routes: List[RouteEvent]) -> None:
         routes_table,
         ignore_order=True,
     )
-    if diff_res != {}:
+    if diff_res != dict():
         raise AssertionError(diff_res)

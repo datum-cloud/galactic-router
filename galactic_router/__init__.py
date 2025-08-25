@@ -14,9 +14,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger("main")
 
+
 @click.command()
-@click.option('--db_url', envvar="DB_URL", default="sqlite:///galactic-router.db", help='Database connection URL')
-@click.option('--db_create', envvar="DB_CREATE", default=True, help='Create database schema')
+@click.option(
+    '--db_url',
+    envvar="DB_URL",
+    default="sqlite:///galactic-router.db",
+    help='Database connection URL'
+)
+@click.option(
+    '--db_create',
+    envvar="DB_CREATE",
+    default=True,
+    help='Create database schema'
+)
 def run(db_url, db_create):
     logger.info("Starting")
 
@@ -31,9 +42,10 @@ def run(db_url, db_create):
 
     logger.info("Stopped")
 
+
 async def spawn(*services):
     try:
-        while True:
+        while True:  # noqa: WPS457
             await asyncio.sleep(0.1)
     except asyncio.CancelledError:
         for service in services:

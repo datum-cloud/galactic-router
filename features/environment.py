@@ -1,4 +1,3 @@
-import asyncio
 from typing import List
 
 from behave.api.async_step import use_or_create_async_context
@@ -25,7 +24,7 @@ class Collector(BaseRouter):
         self.route.clear()
 
     async def stop(self) -> None:
-        pass
+        return  # noqa: WPS324
 
     async def handle_register(self, event: RegisterEvent) -> bool:
         self.register.append(event)
@@ -50,15 +49,15 @@ def before_feature(context, feature):
     db_engine = create_engine("sqlite:///:memory:")
     SQLModel.metadata.create_all(db_engine)
     context.router = StaticRouter(
-        bus = context.bus,
-        db_engine = db_engine,
+        bus=context.bus,
+        db_engine=db_engine,
     )
 
     context.collector = Collector(context.bus)
 
 
 def after_feature(context, feature):
-    async def shutdown():
+    async def shutdown():  # noqa: WPS430
         await context.collector.stop()
         await context.router.stop()
         await context.bus.stop()

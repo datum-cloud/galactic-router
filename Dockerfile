@@ -1,5 +1,8 @@
 FROM python:3
 
+RUN mkdir /workspace
+WORKDIR /workspace
+
 COPY galactic_router galactic_router
 COPY pyproject.toml .
 
