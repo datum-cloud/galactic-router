@@ -103,8 +103,6 @@ class StaticRouter(BaseRouter):
             )
 
         self.session.add(new_reg)
-        if cur_reg is not None:
-            self.session.delete(cur_reg)
         self.session.commit()
         return True
 
