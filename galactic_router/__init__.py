@@ -6,6 +6,7 @@ import click
 from sqlmodel import SQLModel, create_engine
 
 from .bus import EventBus
+from .router.mqtt import MQTTRouter
 from .router.static import StaticRouter
 
 logging.basicConfig(
@@ -20,15 +21,58 @@ logger = logging.getLogger("main")
     '--db_url',
     envvar="DB_URL",
     default="sqlite:///galactic-router.db",
-    help='Database connection URL'
+    help='Database connection URL',
 )
 @click.option(
     '--db_create',
     envvar="DB_CREATE",
     default=True,
-    help='Create database schema'
+    help='Create database schema',
 )
-def run(db_url, db_create):
+@click.option(
+    '--mqtt_url',
+    envvar="MQTT_URL",
+    help='MQTT broker URL',
+    required=True,
+)
+@click.option(
+    '--mqtt_clientid',
+    envvar="MQTT_CLIENTID",
+    help='MQTT client identifier',
+)
+@click.option(
+    '--mqtt_username',
+    envvar="MQTT_USERNAME",
+    help='MQTT username',
+)
+@click.option(
+    '--mqtt_password',
+    envvar="MQTT_PASSWORD",
+    help='MQTT password',
+)
+@click.option(
+    '--mqtt_qos',
+    envvar="MQTT_QOS",
+    help='MQTT QoS level',
+    type=click.IntRange(min=0, max=2),
+    default=1,
+)
+@click.option(
+    '--mqtt_topic_base',
+    envvar="MQTT_TOPIC_BASE",
+    help='MQTT topic base',
+    default='galactic/',
+)
+def run(  # noqa: WPS211,WPS216
+    db_url,
+    db_create,
+    mqtt_url,
+    mqtt_clientid,
+    mqtt_username,
+    mqtt_password,
+    mqtt_qos,
+    mqtt_topic_base,
+):
     logger.info("Starting")
 
     bus = EventBus()
@@ -38,8 +82,25 @@ def run(db_url, db_create):
         SQLModel.metadata.create_all(db_engine)
     router = StaticRouter(bus, db_engine)
 
+    mqtt_router = MQTTRouter(
+        bus,
+        mqtt_url,
+        mqtt_clientid,
+        mqtt_username,
+        mqtt_password,
+        mqtt_qos,
+        mqtt_topic_base,
+    )
+
     async def spawn(*services):  # noqa: WPS430
         await asyncio.gather(*services)
-    aiorun.run(spawn(bus.run(), router.run()))
+
+    aiorun.run(
+        spawn(
+            bus.run(),
+            router.run(),
+            mqtt_router.run()
+        )
+    )
 
     logger.info("Stopped")
