@@ -3,9 +3,9 @@ import asyncio
 import aiorun
 
 import click
-from bubus import EventBus
 from sqlmodel import SQLModel, create_engine
 
+from .bus import EventBus
 from .router.static import StaticRouter
 
 logging.basicConfig(
@@ -38,17 +38,8 @@ def run(db_url, db_create):
         SQLModel.metadata.create_all(db_engine)
     router = StaticRouter(bus, db_engine)
 
-    aiorun.run(spawn(bus, router))
+    async def spawn(*services):  # noqa: WPS430
+        await asyncio.gather(*services)
+    aiorun.run(spawn(bus.run(), router.run()))
 
     logger.info("Stopped")
-
-
-async def spawn(*services):
-    try:
-        while True:  # noqa: WPS457
-            await asyncio.sleep(0.1)
-    except asyncio.CancelledError:
-        for service in services:
-            stop = getattr(service, "stop", None)
-            if callable(stop):
-                await stop()

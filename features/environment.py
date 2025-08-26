@@ -2,10 +2,9 @@ from typing import List
 
 from behave.api.async_step import use_or_create_async_context
 
-from bubus import EventBus
-
 from sqlmodel import SQLModel, create_engine
 
+from galactic_router import EventBus
 from galactic_router.router import BaseRouter
 from galactic_router.router.static import StaticRouter
 from galactic_router.events import RegisterEvent, DeregisterEvent, RouteEvent
@@ -23,7 +22,7 @@ class Collector(BaseRouter):
         self.deregister.clear()
         self.route.clear()
 
-    async def stop(self) -> None:
+    async def run(self) -> None:
         return  # noqa: WPS324
 
     async def handle_register(self, event: RegisterEvent) -> bool:
@@ -54,14 +53,6 @@ def before_feature(context, feature):
     )
 
     context.collector = Collector(context.bus)
-
-
-def after_feature(context, feature):
-    async def shutdown():  # noqa: WPS430
-        await context.collector.stop()
-        await context.router.stop()
-        await context.bus.stop()
-    context.async_context.loop.run_until_complete(shutdown())
 
 
 def after_scenario(context, scenario):

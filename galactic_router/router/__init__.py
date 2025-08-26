@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from bubus import EventBus
+from ..bus import EventBus
 from ..events import RegisterEvent, DeregisterEvent, RouteEvent
 
 
@@ -10,7 +10,7 @@ class BaseRouter(ABC):
         bus.on(RouteEvent, self.handle_route)
 
     @abstractmethod
-    async def stop(self) -> None:
+    async def run(self) -> None:
         ...
 
     @abstractmethod

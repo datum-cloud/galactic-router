@@ -1,14 +1,14 @@
+import asyncio
 import logging
 import uuid
 import ipaddress
-
-from bubus import EventBus
 
 from sqlmodel import SQLModel, Field, Session, select
 from sqlalchemy import Index
 from sqlalchemy.engine import Engine
 
 from . import BaseRouter
+from ..bus import EventBus
 from ..events import RegisterEvent, DeregisterEvent, RouteEvent
 from ..proto import remote_pb2 as pb
 
@@ -34,9 +34,13 @@ class StaticRouter(BaseRouter):
         self.session = Session(db_engine)
         super().__init__(bus)
 
-    async def stop(self) -> None:
-        if self.session is not None:
-            self.session.close()
+    async def run(self) -> None:
+        try:
+            while True:  # noqa: WPS457
+                await asyncio.sleep(0.1)
+        except asyncio.CancelledError:
+            if self.session is not None:
+                self.session.close()
 
     async def handle_register(self, event: RegisterEvent) -> bool:
         vpc_identifier, _ = StaticRouter.extract_vpc_from_srv6_endpoint(
