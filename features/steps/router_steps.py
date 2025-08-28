@@ -74,6 +74,7 @@ def compare_table_to_routes(table: Table, routes: List[RouteEvent]) -> None:
         table,
         routes_table,
         ignore_order=True,
+        report_repetition=True,
     )
     if diff_res != dict():
         raise AssertionError(diff_res)
