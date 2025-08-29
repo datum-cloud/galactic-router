@@ -48,7 +48,7 @@ class StaticRouter(BaseRouter):
         )
 
         cur_reg = self.session.exec(select(Registration).where(
-            Registration.vpc == vpc_identifier,
+            Registration.vpc == vpc_identifier,  # noqa: WPS204
             Registration.network == event.envelope.network,
         )).one_or_none()
         new_reg = Registration(
@@ -68,34 +68,49 @@ class StaticRouter(BaseRouter):
             ))
 
         logger.info(f"register {new_reg.model_dump_json()}")
-        # new registration to new worker
-        await self.bus.dispatch(
-            StaticRouter.create_route(
-                new_reg.worker,
-                new_reg.network,
-                new_reg.endpoint,
-                [new_reg.endpoint],
-                "ADD"
-            )
-        )
+        first_one = len(self.session.exec(
+            select(Registration).where(
+                    Registration.vpc == vpc_identifier,
+                    Registration.worker == new_reg.worker,
+                    Registration.endpoint == new_reg.endpoint,
+                )
+        ).all()) == 0
+        if first_one:
+            # existing registrations to new worker
+            for reg in self.session.exec(
+                select(Registration).where(
+                        Registration.vpc == vpc_identifier,
+                        Registration.network != new_reg.network,
+                        Registration.worker != new_reg.worker,
+                    )
+            ):
+                await self.bus.dispatch(
+                    StaticRouter.create_route(
+                        new_reg.worker,
+                        reg.network,
+                        new_reg.endpoint,
+                        [reg.endpoint],
+                        "ADD"
+                    )
+                )
+
+        # new registration to existing workers
+        # aggregate so we only send to each worker+endpoint combo once
         for reg in self.session.exec(
-            select(Registration)
+            select(
+                Registration.worker,
+                Registration.endpoint
+            )
                 .where(
                     Registration.vpc == vpc_identifier,
                     Registration.network != new_reg.network,
+                    Registration.worker != new_reg.worker,
+                )
+                .group_by(
+                    Registration.worker,
+                    Registration.endpoint
                 )
         ):
-            # existing registration to new worker
-            await self.bus.dispatch(
-                StaticRouter.create_route(
-                    new_reg.worker,
-                    reg.network,
-                    new_reg.endpoint,
-                    [reg.endpoint],
-                    "ADD"
-                )
-            )
-            # new registration to existing worker
             await self.bus.dispatch(
                 StaticRouter.create_route(
                     reg.worker,
@@ -114,13 +129,13 @@ class StaticRouter(BaseRouter):
         vpc_identifier, _ = StaticRouter.extract_vpc_from_srv6_endpoint(
             event.envelope.srv6_endpoint
         )
-        current_reg = self.session.exec(select(Registration).where(
+        cur_reg = self.session.exec(select(Registration).where(
             Registration.vpc == vpc_identifier,
             Registration.network == event.envelope.network,
             Registration.endpoint == event.envelope.srv6_endpoint,
             Registration.worker == event.worker,
         )).one_or_none()
-        if current_reg is None:
+        if cur_reg is None:
             logger.warning(
                 f"could not find registration: "
                 f"vpc={vpc_identifier}, "
@@ -130,21 +145,60 @@ class StaticRouter(BaseRouter):
             )
             return False
 
-        logger.info(f"deregister {current_reg.model_dump_json()}")
+        logger.info(f"deregister {cur_reg.model_dump_json()}")
+        last_one = len(self.session.exec(
+            select(Registration).where(
+                    Registration.vpc == vpc_identifier,
+                    Registration.worker == cur_reg.worker,
+                    Registration.endpoint == cur_reg.endpoint,
+                )
+        ).all()) == 1
+        if last_one:
+            for reg in self.session.exec(
+                select(Registration).where(
+                        Registration.vpc == vpc_identifier,
+                        Registration.network != cur_reg.network,
+                        Registration.worker != cur_reg.worker,
+                    )
+            ):
+                # existing registrations to leaving worker
+                await self.bus.dispatch(
+                    StaticRouter.create_route(
+                        cur_reg.worker,
+                        reg.network,
+                        cur_reg.endpoint,
+                        [reg.endpoint],
+                        "DELETE"
+                    )
+                )
+
         for reg in self.session.exec(
-            select(Registration)
-                .where(Registration.vpc == vpc_identifier)
+            select(
+                Registration.worker,
+                Registration.endpoint
+            )
+                .where(
+                    Registration.vpc == vpc_identifier,
+                    Registration.network != cur_reg.network,
+                    Registration.worker != cur_reg.worker,
+                )
+                .group_by(
+                    Registration.worker,
+                    Registration.endpoint
+                )
         ):
+            # leave registration to existing workers
+            # aggregate so we only send to each worker+endpoint combo once
             await self.bus.dispatch(
                 StaticRouter.create_route(
                     reg.worker,
-                    current_reg.network,
+                    cur_reg.network,
                     reg.endpoint,
-                    [current_reg.endpoint],
+                    [cur_reg.endpoint],
                     "DELETE"
                 )
             )
-        self.session.delete(current_reg)
+        self.session.delete(cur_reg)
         self.session.commit()
         return True
 
