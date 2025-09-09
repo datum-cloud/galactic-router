@@ -100,7 +100,8 @@ def run(  # noqa: WPS211,WPS216
             bus.run(),
             router.run(),
             mqtt_router.run()
-        )
+        ),
+        stop_on_unhandled_errors=True
     )
 
     logger.info("Stopped")
