@@ -3,7 +3,9 @@ import asyncio
 import aiorun
 
 import click
-from sqlmodel import SQLModel, create_engine
+from sqlmodel import create_engine
+from alembic.config import Config
+from alembic import command
 
 from .bus import EventBus
 from .router.mqtt import MQTTRouter
@@ -79,7 +81,9 @@ def run(  # noqa: WPS211,WPS216
 
     db_engine = create_engine(db_url)
     if db_create:
-        SQLModel.metadata.create_all(db_engine)
+        alembic_cfg = Config('alembic/alembic.ini')
+        alembic_cfg.attributes['connection'] = db_engine
+        command.upgrade(alembic_cfg, 'head')
     router = StaticRouter(bus, db_engine)
 
     mqtt_router = MQTTRouter(

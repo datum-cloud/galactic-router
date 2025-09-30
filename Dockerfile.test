@@ -4,6 +4,7 @@ RUN mkdir /workspace
 WORKDIR /workspace
 
 COPY galactic_router galactic_router
+COPY alembic alembic
 COPY features features
 COPY .flake8 .flake8
 COPY pyproject.toml .
