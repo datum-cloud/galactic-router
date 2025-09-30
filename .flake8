@@ -7,6 +7,7 @@ exclude =
     .venv,
     __pycache__,
     galactic_router/proto,
+    alembic/versions,
 extend-ignore =
     # LocalFolderImportViolation
     WPS300,
