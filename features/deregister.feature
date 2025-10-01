@@ -1,4 +1,3 @@
-@wip
 Feature: Endpoint leaves established VPC
 We emit route deletions for the endpoint to the remaining workers.
 

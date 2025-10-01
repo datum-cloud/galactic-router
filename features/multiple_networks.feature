@@ -1,4 +1,3 @@
-@wip
 Feature: One endpoint registers multiple networks
 We emit route additions for the relevant endpoints to the workers without sending duplicates.
 

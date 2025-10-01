@@ -1,4 +1,3 @@
-@wip
 Feature: Register with VPC details in SRv6 endpoints
 Uses actual VPC identifiers including attachments to verify encoding/decoding.
 

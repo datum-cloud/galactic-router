@@ -1,4 +1,3 @@
-@wip
 Feature: VPC setup between endpoints
 We emit route additions for the relevant endpoints to the workers.
 
