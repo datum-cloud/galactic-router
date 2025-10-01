@@ -17,6 +17,10 @@ from ..proto import remote_pb2 as pb
 logger = logging.getLogger("StaticRouter")
 
 
+# time to wait before a registration is considered a re-join
+REJOIN_HOLDDOWN = timedelta(seconds=10)
+
+
 class Registration(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     vpc: str = Field(index=True)
@@ -31,9 +35,6 @@ class Registration(SQLModel, table=True):
 
 
 class StaticRouter(BaseRouter):
-    # time to wait before a registration is considered a re-join
-    REJOIN_HOLDDOWN = timedelta(seconds=10)
-
     def __init__(self, bus: EventBus, db_engine: Engine) -> None:
         self.bus = bus
         self.session = Session(db_engine)
@@ -78,7 +79,7 @@ class StaticRouter(BaseRouter):
                     Registration.vpc == vpc_identifier,
                     Registration.worker == new_reg.worker,
                     Registration.endpoint == new_reg.endpoint,
-                    Registration.created > datetime.utcnow()-StaticRouter.REJOIN_HOLDDOWN,
+                    Registration.created > datetime.utcnow()-REJOIN_HOLDDOWN,
                 )
         ).all()) == 0
         if first_one:

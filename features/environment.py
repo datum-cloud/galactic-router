@@ -47,8 +47,10 @@ def before_all(context):
     context.time_machine = time_machine.travel(datetime.now())
     context.time_traveller = context.time_machine.start()
 
+
 def after_all(context):
     context.time_machine.stop()
+
 
 def before_feature(context, feature):
     context.bus = EventBus()
