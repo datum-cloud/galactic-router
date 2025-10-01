@@ -1,5 +1,8 @@
 from typing import List
 
+import time_machine
+from datetime import datetime
+
 from behave.api.async_step import use_or_create_async_context
 
 from sqlmodel import SQLModel, create_engine
@@ -41,6 +44,11 @@ class Collector(BaseRouter):
 def before_all(context):
     use_or_create_async_context(context)
 
+    context.time_machine = time_machine.travel(datetime.now())
+    context.time_traveller = context.time_machine.start()
+
+def after_all(context):
+    context.time_machine.stop()
 
 def before_feature(context, feature):
     context.bus = EventBus()

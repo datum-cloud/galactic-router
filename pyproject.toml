@@ -23,6 +23,7 @@ test = [
     "deepdiff>=8.6.0",
     "flake8>=7.3.0",
     "wemake-python-styleguide>=1.4.0",
+    "time-machine>=2.19.0",
 ]
 
 [project.scripts]
