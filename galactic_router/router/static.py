@@ -2,6 +2,7 @@ import asyncio
 import logging
 import uuid
 import ipaddress
+from datetime import datetime, timedelta
 
 from sqlmodel import SQLModel, Field, Session, select
 from sqlalchemy import Index
@@ -22,6 +23,7 @@ class Registration(SQLModel, table=True):
     network: str
     endpoint: str
     worker: str
+    created: datetime = Field(default_factory=datetime.utcnow, nullable=False)
 
     __table_args__ = (
         Index("ix_registration_vpc_network", "vpc", "network"),
@@ -29,6 +31,9 @@ class Registration(SQLModel, table=True):
 
 
 class StaticRouter(BaseRouter):
+    # time to wait before a registration is considered a re-join
+    REJOIN_HOLDDOWN = timedelta(seconds=10)
+
     def __init__(self, bus: EventBus, db_engine: Engine) -> None:
         self.bus = bus
         self.session = Session(db_engine)
@@ -73,6 +78,7 @@ class StaticRouter(BaseRouter):
                     Registration.vpc == vpc_identifier,
                     Registration.worker == new_reg.worker,
                     Registration.endpoint == new_reg.endpoint,
+                    Registration.created > datetime.utcnow()-StaticRouter.REJOIN_HOLDDOWN,
                 )
         ).all()) == 0
         if first_one:

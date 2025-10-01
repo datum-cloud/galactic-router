@@ -24,7 +24,8 @@ And the routes are as follows:
 | node3  | 10.1.1.2/32 | 2001:3::1234:1234:1234:ffff | 2001:2::1234:1234:1234:ffff | ADD    |
 
 Scenario: Third endpoint re-joins VPC with two attachments
-When a register event is received from "node3" for network "10.1.1.3/32" and endpoint "2001:3::1234:1234:1234:ffff"
+When 60 seconds pass
+And a register event is received from "node3" for network "10.1.1.3/32" and endpoint "2001:3::1234:1234:1234:ffff"
 And a register event is received from "node3" for network "10.1.1.4/32" and endpoint "2001:3::1234:1234:1234:ffff"
 Then 10 routes were published
 And the routes are as follows:
