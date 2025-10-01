@@ -78,3 +78,8 @@ def compare_table_to_routes(table: Table, routes: List[RouteEvent]) -> None:
     )
     if diff_res != dict():
         raise AssertionError(diff_res)
+
+
+@when(u'{seconds} seconds pass')
+async def step_seconds_pass(context, seconds):
+    context.time_traveller.shift(int(seconds))

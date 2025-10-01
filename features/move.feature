@@ -1,4 +1,3 @@
-@wip
 Feature: Endpoint moves from one worker to another
 We emit route additions and deletions for the relevant endpoints to the workers.
 

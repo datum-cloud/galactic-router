@@ -1,4 +1,3 @@
-@wip
 Feature: First endpoint joins multiple times
 We do not emit route additions to ourselves - EVER.
 
