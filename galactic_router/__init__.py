@@ -79,7 +79,10 @@ def run(  # noqa: WPS211,WPS216
 
     bus = EventBus()
 
-    db_engine = create_engine(db_url)
+    db_engine = create_engine(
+        db_url,
+        pool_pre_ping=True,
+    )
     if db_create:
         alembic_cfg = Config('alembic/alembic.ini')
         alembic_cfg.attributes['connection'] = db_engine
