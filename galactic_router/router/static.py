@@ -34,26 +34,31 @@ class Registration(SQLModel, table=True):
     )
 
 
-class StaticRouter(BaseRouter):
+class StaticRouter(BaseRouter):  # noqa: WPS214,WPS338
     def __init__(self, bus: EventBus, db_engine: Engine) -> None:
         self.bus = bus
-        self.session = Session(db_engine)
+        self.db_engine = db_engine
         super().__init__(bus)
 
     async def run(self) -> None:
-        try:
-            while True:  # noqa: WPS457
-                await asyncio.sleep(0.1)
-        except asyncio.CancelledError:
-            if self.session is not None:
-                self.session.close()
+        while True:  # noqa: WPS457
+            await asyncio.sleep(0.1)
 
     async def handle_register(self, event: RegisterEvent) -> bool:
+        with Session(self.db_engine) as session:
+            return await self._handle_register(session, event)
+        return False
+
+    async def _handle_register(
+        self,
+        session,
+        event: RegisterEvent
+    ) -> bool:
         vpc_identifier, _ = StaticRouter.extract_vpc_from_srv6_endpoint(
             event.envelope.srv6_endpoint
         )
 
-        cur_reg = self.session.exec(select(Registration).where(
+        cur_reg = session.exec(select(Registration).where(
             Registration.vpc == vpc_identifier,  # noqa: WPS204
             Registration.network == event.envelope.network,
         )).one_or_none()
@@ -74,7 +79,7 @@ class StaticRouter(BaseRouter):
             ))
 
         logger.info(f"register {new_reg.model_dump_json()}")
-        first_one = len(self.session.exec(
+        first_one = len(session.exec(
             select(Registration).where(
                     Registration.vpc == vpc_identifier,
                     Registration.worker == new_reg.worker,
@@ -84,7 +89,7 @@ class StaticRouter(BaseRouter):
         ).all()) == 0
         if first_one:
             # existing registrations to new worker
-            for reg in self.session.exec(
+            for reg in session.exec(
                 select(Registration).where(
                         Registration.vpc == vpc_identifier,
                         Registration.network != new_reg.network,
@@ -103,7 +108,7 @@ class StaticRouter(BaseRouter):
 
         # new registration to existing workers
         # aggregate so we only send to each worker+endpoint combo once
-        for reg in self.session.exec(
+        for reg in session.exec(
             select(
                 Registration.worker,
                 Registration.endpoint
@@ -128,15 +133,24 @@ class StaticRouter(BaseRouter):
                 )
             )
 
-        self.session.add(new_reg)
-        self.session.commit()
+        session.add(new_reg)
+        session.commit()
         return True
 
     async def handle_deregister(self, event: DeregisterEvent) -> bool:
+        with Session(self.db_engine) as session:
+            return await self._handle_deregister(session, event)
+        return False
+
+    async def _handle_deregister(
+        self,
+        session,
+        event: DeregisterEvent
+    ) -> bool:
         vpc_identifier, _ = StaticRouter.extract_vpc_from_srv6_endpoint(
             event.envelope.srv6_endpoint
         )
-        cur_reg = self.session.exec(select(Registration).where(
+        cur_reg = session.exec(select(Registration).where(
             Registration.vpc == vpc_identifier,
             Registration.network == event.envelope.network,
             Registration.endpoint == event.envelope.srv6_endpoint,
@@ -153,7 +167,7 @@ class StaticRouter(BaseRouter):
             return False
 
         logger.info(f"deregister {cur_reg.model_dump_json()}")
-        last_one = len(self.session.exec(
+        last_one = len(session.exec(
             select(Registration).where(
                     Registration.vpc == vpc_identifier,
                     Registration.worker == cur_reg.worker,
@@ -161,7 +175,7 @@ class StaticRouter(BaseRouter):
                 )
         ).all()) == 1
         if last_one:
-            for reg in self.session.exec(
+            for reg in session.exec(
                 select(Registration).where(
                         Registration.vpc == vpc_identifier,
                         Registration.network != cur_reg.network,
@@ -179,7 +193,7 @@ class StaticRouter(BaseRouter):
                     )
                 )
 
-        for reg in self.session.exec(
+        for reg in session.exec(
             select(
                 Registration.worker,
                 Registration.endpoint
@@ -205,8 +219,8 @@ class StaticRouter(BaseRouter):
                     "DELETE"
                 )
             )
-        self.session.delete(cur_reg)
-        self.session.commit()
+        session.delete(cur_reg)
+        session.commit()
         return True
 
     async def handle_route(self, event: RouteEvent) -> bool:
