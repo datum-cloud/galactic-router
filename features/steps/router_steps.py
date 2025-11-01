@@ -19,7 +19,7 @@ async def step_when_register(context, worker, network, endpoint):
     await context.bus.dispatch(RegisterEvent(
         worker=worker,
         envelope=Register(network=network, srv6_endpoint=endpoint),
-    ))
+    )).event_result()
 
 
 @when(
@@ -32,7 +32,7 @@ async def step_when_deregister(context, worker, network, endpoint):
     await context.bus.dispatch(DeregisterEvent(
         worker=worker,
         envelope=Deregister(network=network, srv6_endpoint=endpoint),
-    ))
+    )).event_result()
 
 
 @then('{num:d} route was published')

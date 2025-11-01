@@ -100,7 +100,9 @@ def run(  # noqa: WPS211,WPS216
     )
 
     async def spawn(*services):  # noqa: WPS430
-        await asyncio.gather(*services)
+        async with asyncio.TaskGroup() as tg:
+            for service in services:
+                tg.create_task(service)
 
     aiorun.run(
         spawn(
