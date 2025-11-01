@@ -96,12 +96,12 @@ class MQTTRouter(BaseRouter):  # noqa: WPS230
                 await self.bus.dispatch(RegisterEvent(
                     worker=worker,
                     envelope=envelope.register,
-                ))
+                )).event_result()
             case "deregister":
                 await self.bus.dispatch(DeregisterEvent(
                     worker=worker,
                     envelope=envelope.deregister,
-                ))
+                )).event_result()
 
     def parse_url(url: str):
         parsed = urlparse(url)

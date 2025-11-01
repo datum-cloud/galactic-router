@@ -79,7 +79,10 @@ def run(  # noqa: WPS211,WPS216
 
     bus = EventBus()
 
-    db_engine = create_engine(db_url)
+    db_engine = create_engine(
+        db_url,
+        pool_pre_ping=True,
+    )
     if db_create:
         alembic_cfg = Config('alembic/alembic.ini')
         alembic_cfg.attributes['connection'] = db_engine
@@ -97,7 +100,9 @@ def run(  # noqa: WPS211,WPS216
     )
 
     async def spawn(*services):  # noqa: WPS430
-        await asyncio.gather(*services)
+        async with asyncio.TaskGroup() as tg:
+            for service in services:
+                tg.create_task(service)
 
     aiorun.run(
         spawn(
